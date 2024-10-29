@@ -1,0 +1,72 @@
+[DEFAULT]
+allowipv6 = auto
+ignoreip = 127.0.0.1/8 ::1
+bantime  = 10m
+findtime  = 10m
+maxretry = 5
+
+[sshd]
+enabled  = true
+port     = ssh
+logpath  = /var/log/auth.log
+maxretry = 5
+bantime  = 1h
+findtime = 10m
+
+[sshd-ddos]
+enabled  = true
+port     = ssh
+logpath  = /var/log/auth.log
+maxretry = 5
+bantime  = 1h
+findtime = 10m
+
+[nginx-http-auth]
+enabled  = {{ install_nginx_brotli }}
+port     = http,https
+logpath = %(nginx_access_log)s
+maxretry = 5
+
+[nginx-botsearch]
+enabled  = {{ install_nginx_brotli }}
+port     = http,https
+logpath = %(nginx_access_log)s
+maxretry = 3
+
+[php-url-fopen]
+enabled  = {{ install_nginx_brotli }}
+port     = http,https
+
+[nginx-proxy]
+enabled  = {{ install_nginx_brotli }}
+port     = http,https
+logpath = %(nginx_access_log)s
+maxretry = 4
+
+[nginx-dos]
+enabled  = {{ install_nginx_brotli }}
+port     = http,https
+logpath = %(nginx_access_log)s
+maxretry = 3
+
+[wordpress]
+enabled  = false
+port     = http,https
+logpath = %(nginx_access_log)s
+maxretry = 2
+
+[webexploits]
+enabled  = {{ install_nginx_brotli }}
+port     = http,https
+filter   = webexploits
+logpath = %(nginx_access_log)s
+maxretry = 3
+
+[gitea-docker]
+enabled = false
+filter = gitea
+logpath = /opt/gitea/data/log/gitea.log
+maxretry = 5
+findtime = 1h
+bantime = 15m
+action = iptables-allports[chain="FORWARD"]

@@ -1,0 +1,132 @@
+---
+# tasks/main.yml
+- name: Install acme.sh
+  ansible.builtin.shell: |
+    git clone --depth 1 https://github.com/acmesh-official/acme.sh.git ~/myacme
+    cd ~/myacme
+    ./acme.sh --install \
+      --home {{ acme_sh_path }} \
+      --config-home {{ acme_sh_path }}/data \
+      --cert-home /etc/ssl/certs \
+  args:
+    creates: "{{ acme_sh_path }}"
+
+- name: Remove myacme folder
+  ansible.builtin.file:
+    path: ~/myacme
+    state: absent
+
+- name: Ensure acme.sh environment variables and alias are set for bash, zsh, and create acme.sh environment file
+  block:
+    - name: Ensure the Oh My Zsh custom directory exists
+      ansible.builtin.file:
+        path: /usr/share/oh-my-zsh/custom
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+      when: install_oh_my_zsh | default(false)
+
+    - name: Ensure environment variables and alias are set for bash
+      copy:
+        dest: /etc/profile.d/acme.sh
+        content: |
+          export LE_WORKING_DIR="{{ acme_sh_path }}"
+          alias acme.sh="{{ acme_sh_path }}/acme.sh"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Ensure environment variables and alias are set for Zsh if Oh My Zsh is installed
+      copy:
+        dest: /usr/share/oh-my-zsh/custom/acme.zsh
+        content: |
+          export LE_WORKING_DIR="{{ acme_sh_path }}"
+          alias acme.sh="{{ acme_sh_path }}/acme.sh"
+        owner: root
+        group: root
+        mode: '0644'
+      when: install_oh_my_zsh | default(false)
+
+    - name: Create acme.sh environment file
+      copy:
+        dest: "{{ acme_sh_path }}/acme.sh.env"
+        content: |
+          export LE_WORKING_DIR="{{ acme_sh_path }}"
+          alias acme.sh="{{ acme_sh_path }}/acme.sh"
+        owner: root
+        group: root
+        mode: '0644'
+
+- name: Configure Cloudflare API credentials
+  ansible.builtin.copy:
+    dest: "{{ acme_sh_path }}/cloudflare.conf"
+    content: |
+      export CF_Token="{{ cloudflare_api_key }}"
+    mode: '0600'
+
+- name: Prepare domain list for ACME certificate issuance
+  ansible.builtin.set_fact:
+    acme_domains: "{{ domains }}"
+
+- name: Register ACME account with ZeroSSL
+  ansible.builtin.shell: |
+    . {{ acme_sh_path }}/acme.sh.env &&
+    {{ acme_sh_path }}/acme.sh --register-account -m {{ account_email }}
+
+- name: Set ACME variables
+  ansible.builtin.set_fact:
+    acme_staging_certs: "{{ '--staging' if (acme_sh_dry_run | default(false)) else '' }}"
+
+- name: Issue ACME certificates using acme.sh
+  ansible.builtin.shell: |
+    . {{ acme_sh_path }}/acme.sh.env &&
+    {{ acme_sh_path }}/acme.sh --issue {{ acme_staging_certs }} --dns dns_cf -d {{ item }} {% if wildcard %} -d '*.'{{ item }} {% endif %}
+    {% if acme_sh_force_renewal | default(false) %} --force {% endif %}
+  environment:
+    CF_Token: "{{ cloudflare_api_key }}"
+  loop: "{{ acme_domains }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Install ACME certificates
+  ansible.builtin.shell: |
+    . {{ acme_sh_path }}/acme.sh.env &&
+    {{ acme_sh_path }}/acme.sh --install-cert --debug -d {{ item }} \
+      --key-file {{ cert_path }}/{{ item }}.key \
+      --fullchain-file {{ cert_path }}/{{ item }}.crt \
+#      --reloadcmd "service nginx reload"
+  register: install_cert
+  loop: "{{ acme_domains }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Ensure all certificate files have correct permissions
+  ansible.builtin.file:
+    path: "{{ cert_path }}/{{ item }}.crt"
+    mode: '0644'
+  loop: "{{ domains }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Ensure all key files have correct permissions
+  ansible.builtin.file:
+    path: "{{ cert_path }}/{{ item }}.key"
+    mode: '0644'
+  loop: "{{ domains }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Generate Diffie-Hellman Parameters
+  ansible.builtin.command: >
+    openssl dhparam -out {{ cert_path }}/dhparam.pem 2048
+
+- name: Ensure DH parameters file has correct permissions
+  ansible.builtin.file:
+    path: "{{ cert_path }}/dhparam.pem"
+    mode: '0644'
+
+- name: Restart NGINX to apply changes
+  service:
+    name: nginx
+    state: restarted

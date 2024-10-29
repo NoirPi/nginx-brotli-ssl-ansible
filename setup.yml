@@ -1,0 +1,49 @@
+---
+- hosts: all
+  become: yes
+  vars:
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+
+    install_acmesh: true
+    install_fail2ban: true
+    install_nginx_brotli: true
+
+    #### NGINX Settings####
+    nginx_server_header: "nginx"
+    nginx_mainline_version: true
+    nginx_remove_mail_modules: true
+    nginx_remove_stream_modules: false
+
+    ### ACME.sh Settings #####
+    acme_sh_dry_run: true
+    acme_sh_path: "/usr/local/lib/acme.sh"
+    cert_path: "/etc/ssl/private"
+    wildcard: true
+    domains:
+      - domain.de
+      - domain.com
+    acme_sh_force_renewal: true
+    generate_domain_configs: true
+    cloudflare_api_key: YOUR_CLOUDFLARE_API_TOKEN_HERE
+    account_email: admin@{{ domains[0] }}
+
+
+
+  roles:
+    - role: nginx-brotli
+      no_log: false
+      debug:
+        msg: "NGINX & Brotli role execution is skipped because install_nginx_brotli is set to {{ install_nginx_brotli }}."
+      when: install_nginx_brotli | default(false)
+
+    - role: acme.sh
+      no_log: false
+      debug:
+        msg: "ACME.sh role execution is skipped because install_acmesh is set to {{ install_acmesh }}."
+      when: install_acmesh | default(false)
+
+    - role: fail2ban
+      no_log: false
+      debug:
+        msg: "Fail2Ban role execution is skipped because install_fail2ban is set to {{ install_fail2ban }}."
+      when: install_fail2ban | default(false)

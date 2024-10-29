@@ -1,0 +1,115 @@
+##
+# You should look at the following URL's in order to grasp a solid understanding
+# of Nginx configuration files in order to fully unleash the power of Nginx.
+# https://www.nginx.com/resources/wiki/start/
+# https://www.nginx.com/resources/wiki/start/topics/tutorials/config_pitfalls/
+# https://wiki.debian.org/Nginx/DirectoryStructure
+#
+# In most cases, administrators will remove this file from sites-enabled/ and
+# leave it as reference inside of sites-available where it will continue to be
+# updated by the nginx packaging team.
+#
+# This file will automatically load configuration files provided by other
+# applications, such as Drupal or Wordpress. These applications will be made
+# available underneath a path with that package name, such as /drupal8.
+#
+# Please see /usr/share/doc/nginx-doc/examples/ for more detailed examples.
+##
+
+# Default server configuration
+#
+server {
+    listen 80;
+    listen [::]:80;
+
+    # Redirect all HTTP requests to HTTPS
+    #
+    # This redirects all traffic from HTTP to HTTPS to ensure encrypted communication.
+    return 301 https://$host$request_uri;
+    }
+
+# HTTPS server configuration
+#
+server {
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name {{ domain }};
+
+    # SSL configuration
+    #
+    # SSL certificate and key
+    ssl_certificate {{ cert_path }}/{{ domain }}.crt;
+    ssl_certificate_key {{ cert_path }}/{{ domain }}.key;
+    ssl_dhparam {{ cert_path }}/dhparam.pem;  # Diffie-Hellman parameters for improved security
+
+    # Security settings
+    #
+    # Protocols to use for SSL/TLS
+    ssl_protocols TLSv1.3 TLSv1.2;
+
+    # Ciphers to use for SSL/TLS
+    ssl_ciphers 'TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES128-SHA256:ECDHE-RSA-AES256-SHA384';
+
+    # Prefer server ciphers over client ciphers
+    ssl_prefer_server_ciphers on;
+
+    # Session settings
+    #
+    # Cache SSL sessions for performance
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_timeout 10m;
+
+    # OCSP Stapling for certificate status checking
+    ssl_stapling on;
+    ssl_stapling_verify on;
+    ssl_trusted_certificate {{ cert_path }}/{{ domain }}.crt;
+
+    # HTTP Security Headers
+    #
+    # Strict-Transport-Security: Enforces HTTPS and allows for preload.
+    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains; preload" always;
+    # X-Frame-Options: Protects against clickjacking by disallowing the page from being framed.
+    add_header X-Frame-Options "DENY" always;
+    # X-Content-Type-Options: Prevents MIME type sniffing.
+    add_header X-Content-Type-Options "nosniff" always;
+    # X-XSS-Protection: Enables the browser's XSS protection.
+    add_header X-XSS-Protection "1; mode=block" always;
+    # Referrer-Policy: Controls referrer information sent with requests.
+    add_header Referrer-Policy "no-referrer" always;
+    # Content-Security-Policy: Restricts sources for content such as scripts and styles.
+    add_header Content-Security-Policy "default-src 'self';" always;
+
+    # Define the root directory and index file
+    root /var/www/html;
+    index index.html index.htm index.nginx-debian.html;
+
+    # Serve the default Nginx page
+    #
+    # This location block tries to serve the requested file or directory,
+    # and returns a 404 error if not found.
+    location / {
+        try_files $uri $uri/ =404;
+        fancyindex on;
+    }
+
+    # Optional: Define a custom error page
+    #
+    # This location block serves a custom 404 error page.
+    error_page 404 /404.html;
+    location = /404.html {
+        root /var/www/html;
+        internal;  # Marks this location as internal, meaning it cannot be accessed directly.
+    }
+
+    # Additional security settings (optional)
+    #
+    # Hide Nginx version information
+    server_tokens off;
+    # Deny access to hidden files
+    location ~ /\.ht {
+        deny all;
+
+    }
+}
+
