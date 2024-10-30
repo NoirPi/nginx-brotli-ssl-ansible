@@ -8,7 +8,7 @@ install_nginx_brotli: true
 #### NGINX Settings ####
 nginx_server_header: "nginx"
 nginx_mainline_version: true
-nginx_remove_mail_modules: true
+nginx_remove_mail_modules: false
 nginx_remove_stream_modules: false
 
 ### ACME.sh Settings #####
