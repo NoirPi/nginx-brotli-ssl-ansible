@@ -1,11 +1,10 @@
 ---
-
 - name: Ensure apt cache is updated
-  apt:
-    update_cache: yes
+  ansible.builtin.apt:
+    update_cache: true
 
 - name: Install required packages for adding repositories
-  apt:
+  ansible.builtin.apt:
     name:
       - curl
       - gnupg2
@@ -15,21 +14,47 @@
     state: present
 
 - name: Install sudo
-  apt:
+  ansible.builtin.apt:
     name: sudo
     state: present
 
 - name: Import the official NGINX signing key
-  shell: |
-    curl https://nginx.org/keys/nginx_signing.key | gpg --dearmor | tee /usr/share/keyrings/nginx-archive-keyring.gpg >/dev/null
+  ansible.builtin.get_url:
+    url: https://nginx.org/keys/nginx_signing.key
+    dest: /tmp/nginx_signing.key
+    mode: '0644'
+
+- name: Check if GPG key conversion is needed
+  ansible.builtin.stat:
+    path: /usr/share/keyrings/nginx-archive-keyring.gpg
+  register: gpg_key_stat
+
+- name: Convert the signing key to GPG format
+  ansible.builtin.command:
+    cmd: gpg --batch --dearmor /tmp/nginx_signing.key
+  register: gpg_conversion
+  ignore_errors: true
+  changed_when: "false"
+
+- name: Move GPG key to the correct location
+  ansible.builtin.command:
+    cmd: mv /tmp/nginx_signing.key.gpg /usr/share/keyrings/nginx-archive-keyring.gpg
+  register: move_result
+  changed_when: "false"
+
+- name: Confirm key move was successful
+  ansible.builtin.debug:
+    msg: "GPG key moved successfully!"
+  when: move_result is defined and 'rc' in move_result and move_result.rc == 0
 
 - name: Verify the NGINX signing key
-  command: |
-    gpg --dry-run --quiet --no-keyring --import --import-options import-show /usr/share/keyrings/nginx-archive-keyring.gpg
+  ansible.builtin.command:
+    cmd: gpg --dry-run --quiet --no-keyring --import --import-options import-show /usr/share/keyrings/nginx-archive-keyring.gpg
   register: key_verification
+  changed_when: "false"
 
 - name: Set NGINX version variable
-  set_fact:
+  ansible.builtin.set_fact:
     nginx_repo_url: "https://nginx.org/packages/{{ 'mainline' if nginx_mainline_version else 'nginx' }}/{{ ansible_distribution | lower }}"
     nginx_repo_distribution: "{{ ansible_distribution_release }}"
 
@@ -39,20 +64,21 @@
     filename: "nginx"
 
 - name: Update apt cache
-  apt:
-    update_cache: yes
+  ansible.builtin.apt:
+    update_cache: true
 
 - name: Set up repository pinning for NGINX
-  copy:
+  ansible.builtin.copy:
     content: |
       Package: *
       Pin: origin nginx.org
       Pin: release o=nginx
       Pin-Priority: 900
     dest: /etc/apt/preferences.d/99nginx
+    mode: '0644'
 
 - name: Install required packages for NGINX and Brotli
-  apt:
+  ansible.builtin.apt:
     name:
       - cmake
       - git
@@ -65,126 +91,148 @@
       - libbrotli1
       - libbrotli-dev
     state: present
-    update_cache: yes
+    update_cache: true
 
 - name: Get installed NGINX version
-  command: nginx -v
+  ansible.builtin.command:
+    cmd: nginx -v
   register: nginx_version
   ignore_errors: true
-  changed_when: false
+  changed_when: "false"
 
 - name: Extract NGINX version number
-  set_fact:
+  ansible.builtin.set_fact:
     ngver: "{{ nginx_version.stderr | regex_search('nginx/([0-9.]+)', '\\1') | first }}"
   when: nginx_version is defined and nginx_version.stderr is defined
 
 - name: Create temporary build directory
-  tempfile:
+  ansible.builtin.tempfile:
     state: directory
   register: builddir
 
 - name: Download NGINX source
-  get_url:
+  ansible.builtin.get_url:
     url: "https://nginx.org/download/nginx-{{ ngver }}.tar.gz"
     dest: "{{ builddir.path }}/nginx-{{ ngver }}.tar.gz"
+    mode: '0644'
+  when: ngver is defined and ngver | length > 0
+
+- name: Set permissions for downloaded NGINX source file
+  ansible.builtin.file:
+    path: "{{ builddir.path }}/nginx-{{ ngver }}.tar.gz"
+    mode: '0644'
   when: ngver is defined and ngver | length > 0
 
 - name: Extract NGINX source
-  unarchive:
+  ansible.builtin.unarchive:
     src: "{{ builddir.path }}/nginx-{{ ngver }}.tar.gz"
     dest: "{{ builddir.path }}"
-    remote_src: yes
+    remote_src: true
   when: ngver is defined and ngver | length > 0
 
-- name: Clone ngx_brotli repository
-  git:
+- name: Clone and update ngx_brotli repository
+  ansible.builtin.git:
     repo: "https://github.com/google/ngx_brotli.git"
     dest: "{{ builddir.path }}/ngx_brotli"
+    recursive: true
+    update: true
+    force: true
+    version: master
+  register: brotli_repo
 
 - name: Clone nginx_cookie_flag_module repository
-  git:
+  ansible.builtin.git:
     repo: "https://github.com/AirisX/nginx_cookie_flag_module.git"
     dest: "{{ builddir.path }}/nginx_cookie_flag_module"
+    update: true
+    force: true
+    version: master
 
 - name: Clone ngx-fancyindex repository
-  git:
+  ansible.builtin.git:
     repo: "https://github.com/aperezdc/ngx-fancyindex.git"
     dest: "{{ builddir.path }}/ngx-fancyindex"
+    update: true
+    force: true
+    version: master
 
 - name: Clone headers-more-nginx-module repository
-  git:
+  ansible.builtin.git:
     repo: "https://github.com/openresty/headers-more-nginx-module.git"
     dest: "{{ builddir.path }}/headers-more-nginx-module"
-
-- name: Update submodule in ngx_brotli
-  command: git submodule update --init
-  args:
-    chdir: "{{ builddir.path }}/ngx_brotli"
-
-#- name: Clone nginx-module-vts repository
-#  git:
-#    repo: "https://github.com/vozlt/nginx-module-vts.git"
-#    dest: "{{ builddir.path }}/nginx-module-vts"
+    update: true
+    force: true
+    version: master
 
 - name: Get latest PCRE2 release
-  uri:
+  ansible.builtin.uri:
     url: "https://api.github.com/repos/PCRE2Project/pcre2/releases/latest"
     method: GET
-    return_content: yes
+    return_content: true
   register: pcre2_release
 
 - name: Set PCRE2 version and download URL
-  set_fact:
+  ansible.builtin.set_fact:
     pcre2_version: "{{ pcre2_release.json.tag_name }}"
     pcre2_download_url: "{{ pcre2_release.json.assets | selectattr('name', 'search', '.tar.gz$') | map(attribute='browser_download_url') | first }}"
 
 - name: Create temporary build directory for PCRE2
-  tempfile:
+  ansible.builtin.tempfile:
     state: directory
   register: pcre2_builddir
 
 - name: Download PCRE2 source code
-  get_url:
+  ansible.builtin.get_url:
     url: "{{ pcre2_download_url }}"
     dest: "{{ pcre2_builddir.path }}/{{ pcre2_version }}.tar.gz"
+    mode: '0644'
   when: pcre2_download_url is defined
 
 - name: Extract PCRE2 source code
-  unarchive:
+  ansible.builtin.unarchive:
     src: "{{ pcre2_builddir.path }}/{{ pcre2_version }}.tar.gz"
     dest: "{{ pcre2_builddir.path }}"
-    remote_src: yes
+    remote_src: true
 
 - name: Compile and install PCRE2
-  command: ./configure --prefix=/usr/local
+  ansible.builtin.command:
+    cmd: ./configure --prefix=/usr/local
   args:
     chdir: "{{ pcre2_builddir.path }}/{{ pcre2_version }}"
+  changed_when: "false"
 
 - name: Make PCRE2
-  command: make
+  ansible.builtin.command:
+    cmd: make
   args:
     chdir: "{{ pcre2_builddir.path }}/{{ pcre2_version }}"
+  changed_when: "false"
 
 - name: Install PCRE2
-  command: make install
+  ansible.builtin.command:
+    cmd: make install
   args:
     chdir: "{{ pcre2_builddir.path }}/{{ pcre2_version }}"
+  changed_when: "false"
 
-- name: Set extra modules based on nginx_remove_mail_module
-  set_fact:
-    extra_modules: >
+- name: Set extra modules based on nginx_remove_mail_module and nginx_remove_stream_modules
+  ansible.builtin.set_fact:
+    extra_modules: |
+      {%- set modules = [] -%}
       {%- if nginx_remove_mail_modules is not true -%}
-      --with-mail
-      --with-mail_ssl_module
+      {%- set _ = modules.append('--with-mail') -%}
+      {%- set _ = modules.append('--with-mail_ssl_module') -%}
       {%- endif -%}
       {%- if nginx_remove_stream_modules is not true -%}
-      --with-stream
-      --with-stream_realip_module
-      --with-stream_ssl_module
+      {%- set _ = modules.append('--with-stream') -%}
+      {%- set _ = modules.append('--with-stream_realip_module') -%}
+      {%- set _ = modules.append('--with-stream_ssl_module') -%}
       {%- endif -%}
+      {{ modules | join(' ') }}
+
 
 - name: Configure NGINX with all specified modules
-  command: >
+  ansible.builtin.command: >
     ./configure
     --prefix=/etc/nginx
     --sbin-path=/usr/sbin/nginx
@@ -220,7 +268,7 @@
     --with-http_sub_module
     --with-http_v2_module
     --with-http_v3_module
-    {{ extra_modules | trim }} 
+    {{ extra_modules | trim }}
     --with-pcre="{{ pcre2_builddir.path }}/{{ pcre2_version }}"
     --add-dynamic-module={{ builddir.path }}/ngx_brotli
     --add-dynamic-module={{ builddir.path }}/nginx_cookie_flag_module
@@ -229,26 +277,37 @@
 #    --add-dynamic-module={{ builddir.path }}/nginx-module-vts
   args:
     chdir: "{{ builddir.path }}/nginx-{{ ngver }}"
+  register: configure_output
+  # noinspection YAMLIncompatibleTypes
+  changed_when: "'configuration complete' in configure_output.stdout"  # Correct usage
+
+- name: Check if NGINX is already installed
+  ansible.builtin.stat:
+    path: /usr/sbin/nginx
 
 - name: Make NGINX
-  command: make
-  args:
+  ansible.builtin.command:
+    cmd: make
     chdir: "{{ builddir.path }}/nginx-{{ ngver }}"
+  register: make_output
+  changed_when: "'Make finished successfully' in make_output.stdout"
 
 - name: Install NGINX
-  command: make install
-  args:
+  ansible.builtin.command:
+    cmd: make install
     chdir: "{{ builddir.path }}/nginx-{{ ngver }}"
+  register: install_output
+  changed_when: "'Install finished successfully' in install_output.stdout"
 
 - name: Find compiled module files
-  find:
+  ansible.builtin.find:
     paths: "{{ builddir.path }}/nginx-{{ ngver }}/objs/"
     patterns: "*.so"
   register: so_files
 
 - name: Move compiled modules to the modules directory
-  copy:
-    remote_src: yes
+  ansible.builtin.copy:
+    remote_src: true
     src: "{{ item.path }}"
     dest: "/usr/lib/nginx/modules/{{ item.path | basename }}"
     mode: preserve
@@ -256,7 +315,7 @@
   when: ngver is defined and ngver | length > 0
 
 - name: Create customized nginx.conf with pre settings
-  template:
+  ansible.builtin.template:
     src: default_nginx_conf.j2
     dest: /etc/nginx/nginx.conf
     owner: root
@@ -264,7 +323,7 @@
     mode: '0644'
 
 - name: Create cloudflare ip list
-  template:
+  ansible.builtin.template:
     src: cloudflare_ip.conf.j2
     dest: /etc/nginx/cloudflare.conf
     owner: root
@@ -272,41 +331,41 @@
     mode: '0644'
 
 - name: Ensure /var/www/html directory exists
-  file:
+  ansible.builtin.file:
     path: /var/www/html
     state: directory
     mode: '0755'
     owner: www-data
     group: www-data
-    recurse: yes
+    recurse: true
 
 - name: Remove build dependencies
-  apt:
+  ansible.builtin.apt:
     name:
       - cmake
       - zlib1g-dev
       - build-essential
     state: absent
-  ignore_errors: true
+  failed_when: false
 
 - name: Remove default symbolic link
-  file:
+  ansible.builtin.file:
     path: /etc/nginx/sites-enabled/default
     state: absent
-  ignore_errors: true
+  failed_when: false
 
 - name: Remove the sites-enabled directory, use /etc/nginx/conf.d instead
-  file:
+  ansible.builtin.file:
     path: /etc/nginx/sites-enabled
     state: absent
 
 - name: Remove the sites-available directory, use /etc/nginx/conf.d instead
-  file:
+  ansible.builtin.file:
     path: /etc/nginx/sites-available
     state: absent
 
 - name: Cleanup temporary build directories
-  file:
+  ansible.builtin.file:
     path: "{{ item }}"
     state: absent
   loop:
@@ -314,7 +373,7 @@
     - "{{ pcre2_builddir.path }}"
 
 - name: Create Nginx config for domains with SSL settings
-  template:
+  ansible.builtin.template:
     src: nginx_default_server_conf.j2
     dest: "/etc/nginx/conf.d/{{ domain }}.conf"
     owner: root
