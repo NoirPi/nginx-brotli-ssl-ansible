@@ -19,7 +19,7 @@ oh_my_zsh_plugins: [ ansible, colored-man-pages, colorize, command-not-found, co
 #### NGINX Settings ####
 nginx_server_header: "nginx"
 nginx_mainline_version: true
-nginx_remove_mail_modules: true
+nginx_remove_mail_modules: false
 nginx_remove_stream_modules: false
 
 ### ACME.sh Settings #####
