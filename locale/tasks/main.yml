@@ -1,0 +1,52 @@
+---
+# tasks/main.yml
+- name: Führe Systemupdates durch
+  ansible.builtin.apt:
+    update_cache: true
+    upgrade: dist
+  register: update_result
+
+- name: Installiere locale und andere Pakete
+  ansible.builtin.apt:
+    name: "locales"
+    state: present
+
+- name: Konfiguriere die zu generierenden Locales
+  ansible.builtin.lineinfile:
+    path: /etc/locale.gen
+    regexp: '^{{ item }}'
+    line: '{{ item }} UTF-8'
+  loop:
+    - 'en_US.UTF-8'
+    - 'de_DE.UTF-8'
+    - 'C.UTF-8'
+    - "{{ main_lang }}"
+
+- name: Generate locales
+  ansible.builtin.command: locale-gen
+  become: true
+  changed_when: false
+
+- name: Setze Regions- und Spracheinstellungen
+  ansible.builtin.lineinfile:
+    path: /etc/default/locale
+    regexp: '^{{ item.key }}'
+    line: '{{ item.key }}={{ item.value }}'
+  loop:
+    - { key: 'LANG', value: "{{ main_lang }}" }
+    - { key: 'LC_MESSAGES', value: "{{ main_lang }}" }
+    - { key: 'LANGUAGE', value: "{{ main_lang }}" }
+    - { key: 'LC_CTYPE', value: "C.UTF-8" }
+
+- name: Update locale
+  ansible.builtin.command: >
+    update-locale
+    LANG={{ main_lang }}
+    LC_MESSAGES={{ main_lang }}
+    LANGUAGE={{ main_lang }}
+    LC_CTYPE=C.UTF-8
+  changed_when: false
+
+- name: Setze Zeitzone auf {{ timezone }}
+  community.general.timezone:
+    name: "{{ timezone }}"

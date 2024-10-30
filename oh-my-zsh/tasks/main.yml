@@ -1,0 +1,75 @@
+# tasks/main.yml
+
+- name: Install necessary packages
+  ansible.builtin.apt:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - zsh-common
+    - git
+    - wget
+    - command-not-found
+    - xclip
+    - fonts-powerline
+
+- name: Install language pack for English (only on Ubuntu)
+  ansible.builtin.apt:
+    name: language-pack-en
+    state: present
+  when: ansible_distribution == "Ubuntu"
+
+- name: Download the Oh My Zsh installation script
+  ansible.builtin.get_url:
+    url: https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh
+    dest: /tmp/oh_my_zsh_install.sh
+    mode: '0755'
+
+- name: Install Oh My Zsh globally in {{ oh_my_zsh_path }}
+  ansible.builtin.shell: |
+    export ZSH="{{ oh_my_zsh_path }}"
+    sh /tmp/oh_my_zsh_install.sh --unattended
+    chsh -s /bin/zsh
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Clone zsh-autocomplete plugin
+  ansible.builtin.git:
+    repo: https://github.com/zsh-users/zsh-autosuggestions.git
+    dest: "{{ oh_my_zsh_path }}/custom/plugins/zsh-autosuggestions"
+    update: true
+    force: true
+    version: master
+  become: true
+
+
+- name: Set permissions for Oh My Zsh
+  ansible.builtin.file:
+    path: "{{ oh_my_zsh_path }}"
+    state: directory
+    mode: '0755'
+    recurse: true
+
+- name: Create /root/.zshrc
+  ansible.builtin.template:
+    src: global_zshrc.j2
+    dest: /root/.zshrc
+    mode: '0644'
+
+- name: Create /root/.Xauthority file
+  ansible.builtin.file:
+    path: /root/.Xauthority
+    state: touch
+    mode: '0600'
+
+- name: Create /etc/zsh/newuser.zshrc.recommended
+  ansible.builtin.template:
+    src: global_zshrc.j2
+    dest: /etc/zsh/newuser.zshrc.recommended
+    mode: '0644'
+
+- name: Create /etc/skel/.Xauthority file
+  ansible.builtin.file:
+    path: /etc/skel/.Xauthority
+    state: touch
+    mode: '0600'

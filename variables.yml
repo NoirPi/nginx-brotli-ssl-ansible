@@ -5,6 +5,17 @@ install_acmesh: true
 install_fail2ban: true
 install_nginx_brotli: true
 
+#### Locale Settings #####
+main_lang: "en_US.UTF-8"
+timezone: "UTC"
+
+#### Oh-my-zsh Settings ####
+oh_my_zsh_path: "/usr/share/oh-my-zsh"
+oh_my_zsh_plugins: [ ansible, colored-man-pages, colorize, command-not-found, copybuffer, copyfile, copypath, cp,
+                     dirhistory, docker, docker-compose, extract, fasd, git, git-extras, gitfast, github, httpie,
+                     history, jsontools, last-working-dir, pep8, perms, pip, python, rsync, safe-paste, screen,
+                     sublime, sudo, systemadmin, systemd, wd, zsh-autosuggestions ]
+
 #### NGINX Settings ####
 nginx_server_header: "nginx"
 nginx_mainline_version: true

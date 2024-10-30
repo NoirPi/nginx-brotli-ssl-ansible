@@ -6,6 +6,18 @@
     - variables.yml
 
   roles:
+    - role: locale
+      no_log: false
+      debug:
+        msg: "Locale Setup role execution is skipped because setup_locale_and_time is set to {{ setup_locale_and_time }}."
+      when: setup_locale_and_time | default(false)
+
+    - role: oh-my-zsh
+      no_log: false
+      debug:
+        msg: "oh-my-zsh role execution is skipped because install_oh_my_zsh is set to {{ install_oh_my_zsh }}."
+      when: install_oh_my_zsh | default(false)
+
     - role: nginx-brotli
       no_log: false
       debug:

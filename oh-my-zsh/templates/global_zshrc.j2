@@ -1,0 +1,251 @@
+# Paths and Environment Variables
+# If you come from bash you might have to change your $PATH.
+# export PATH=$HOME/bin:$HOME/.local/bin:/usr/local/bin:$PATH
+# Path to your Oh My Zsh installation.
+export ZSH=/usr/share/oh-my-zsh
+
+# Set the path for Zsh completion dump
+export ZSH_COMPDUMP=$ZSH/cache/.zcompdump-$HOST
+
+# Set the path for the history file
+export HISTFILE=$ZSH/cache/.zcompdump-$USER
+
+# Set the date format for history timestamps
+HIST_STAMPS="%Y-%m-%d %H:%M"
+
+# Set the color scheme for colorizing output in `ccat`
+export ZSH_COLORIZE_STYLE="colorful"
+
+# Set the theme for the Zsh prompt
+ZSH_THEME="agnoster"
+
+# Set list of themes to pick from when loading at random
+# ZSH_THEME_RANDOM_CANDIDATES=( "robbyrussell" "agnoster" )
+
+# Uncomment one of the following lines to change the auto-update behavior
+# zstyle ':omz:update' mode disabled  # disable automatic updates
+# zstyle ':omz:update' mode auto      # update automatically without asking
+zstyle ':omz:update' mode reminder  # just remind me to update when it's time
+
+# Uncomment the following line to change how often to auto-update (in days).
+# zstyle ':omz:update' frequency 13
+
+# Uncomment the following line if pasting URLs and other text is messed up.
+# DISABLE_MAGIC_FUNCTIONS="true"
+
+# Uncomment the following line to disable colors in ls.
+# DISABLE_LS_COLORS="true"
+
+# Uncomment the following line to disable auto-setting terminal title.
+# DISABLE_AUTO_TITLE="true"
+
+# Uncomment the following line to enable command auto-correction.
+# ENABLE_CORRECTION="true"
+
+# Uncomment the following line if you want to disable marking untracked files
+# under VCS as dirty.
+# DISABLE_UNTRACKED_FILES_DIRTY="true"
+
+# Uncomment the following line if you want to change the command execution time
+# stamp shown in the history command output.
+# or set a custom format using the strftime function format specifications.
+# see 'man strftime' for details.
+
+# User configuration
+# Set the manual path to include local man pages
+# export MANPATH="/usr/local/man:$MANPATH"
+# You may need to manually set your language environment
+# export LANG=en_US.UTF-8  # Set the default language to English UTF-8
+
+# Preferred editor for local and remote sessions
+# if [[ -n $SSH_CONNECTION ]]; then
+#   export EDITOR='vim'  # Use Vim as the default editor when connected via SSH
+# else
+#   export EDITOR='nvim'  # Use Neovim as the default editor otherwise
+# fi
+
+# Set architecture flags for compilation
+# export ARCHFLAGS="-arch $(uname -m)"
+
+# Plugins
+# Load specified plugins for Oh My Zsh
+plugins=(
+{% for plugin, comment in oh_my_zsh_plugins %}
+    {{ plugin }}{{ ' ' * (25 - plugin | length) }}# {{ comment }}
+{% endfor %}
+# optionals:
+# per-directory-history   # Saves command history for each directory separately.
+# dotenv                  # Loads environment variables from a `.env` file.
+)
+
+
+# Source Oh My Zsh and command not found handler
+source $ZSH/oh-my-zsh.sh  # Initialize Oh My Zsh
+source /etc/zsh_command_not_found  # Load command-not-found handler
+
+# Aliases
+# Set personal aliases, overriding those provided by Oh My Zsh libs, plugins, and themes.
+# Examples:
+# - $ZSH_CUSTOM/aliases.zsh
+# - $ZSH_CUSTOM/macos.zsh
+# For a full list of active aliases, run `alias`.
+
+# Common 'ls' shortcuts for quick use
+alias l='ls -lFh'  # List files in long format with human-readable sizes
+alias la='ls -lAFh'  # List all files including hidden ones in long format
+alias lr='ls -tRFh'  # List files recursively sorted by modification time
+alias lt='ls -ltFh'  # List files in long format sorted by modification time
+alias ll='ls -lAh'  # List all files (including hidden) in long format
+alias ldot='ls -ld .*'  # List details of hidden files
+alias lS='ls -1FSsh'  # List files in one column with size and sorted
+alias lart='ls -1Fcart'  # List files in one column, sorted by access time
+alias lrt='ls -1Fcrt'  # List files in one column, sorted by change time
+
+# Fast access to ~/.zshrc file
+alias zshrc='vim ~/.zshrc'  # Open the Zsh configuration file in Vim
+
+# Colorized 'grep'
+alias grep='grep --color'  # Enable color output for grep
+alias sgrep='grep -R -n -H -C 5 --exclude-dir={.git,.svn,CVS}'  # Recursive grep with context lines
+
+# 'tail' with the 'follow' option
+alias t='tail -f'  # Follow the end of a file with tail
+
+# Command line head/tail shortcuts
+alias -g H='| head'  # Pipe to head to show the first lines
+alias -g T='| tail'  # Pipe to tail to show the last lines
+alias -g G='| grep'  # Pipe to grep for searching
+alias -g L="| less"  # Pipe to less for paging through output
+alias -g M="| most"  # Pipe to most for an interactive pager
+alias -g LL="2>&1 | less"  # Redirect error output and pipe to less
+alias -g CA="2>&1 | cat -A"  # Show control characters in output
+alias -g NE="2> /dev/null"  # Discard error output
+alias -g NUL="> /null 2>&1"  # Redirect output to a null device
+alias -g P="2>&1| pygmentize -l pytb"  # Pipe error output to pygmentize for syntax highlighting
+
+# Disk usage
+alias dud='du -d 1 -h'  # Show disk usage for current directory
+alias duf='du -sh *'  # Show summarized disk usage for all files and directories
+
+# Find directories/files
+alias fd='find . -type d -name'  # Find directories by name
+alias ff='find . -type f -name'  # Find files by name
+
+# History
+alias h='history'  # Show command history
+alias hgrep="fc -El 0 | grep"  # Search command history with grep
+
+# Man pages
+alias help='man'  # Show the man page for a command
+
+# Process status
+alias p='ps -f'  # Show full format listing of current processes
+
+# Sort numerically in reverse order
+alias sortnr='sort -n -r'  # Sort output numerically in reverse order
+
+# Unset
+alias unexport='unset'  # Unset a variable or alias
+
+# Alias for system update only if the user is root
+if [[ $EUID -eq 0 ]]; then
+alias update='apt update && apt upgrade -y && apt dist-upgrade -y'
+else
+alias update='echo "This command must be run as root."'
+fi
+
+# Tar-Gz functions
+# Create a gzipped tarball of a directory
+targz() {
+    tar -zcvf "$(basename "$1")_$(date '+%Y-%m-%d_%H-%M').tar.gz" -C "$(dirname "$1")" "$(basename "$1")"
+}
+
+# Extract a gzipped tarball
+untargz() {
+    tar -zxvf $1;
+}
+
+# List contents of a tarball
+listtar() {
+    tar -tf $1;
+}
+
+# Keybindings
+# Move to the beginning of the line with Home key
+bindkey "^[[H" beginning-of-line
+# Move to the end of the line with End key
+bindkey "^[[F" end-of-line
+
+# Custom rm command
+rm() {
+    # Check if the argument is a directory and the "-rf" flag is not provided
+    if [[ -d "$1" && "$2" != "-rf" ]]; then
+        # Ask for confirmation before deleting a directory
+        echo "Are you sure you want to delete the directory '$1'? (y/n)"
+        read -r response
+        if [[ "$response" != "y" ]]; then
+            echo "Aborted."
+            return 1
+        fi
+    fi
+    command rm "$@"  # Call the original rm command
+}
+
+# Custom journal cleanup function
+journal_cleanup() {
+    local unit=$1  # Service name to clean the journal for
+    local rotate=$2  # Flag to rotate the journal
+    local time=$3  # Optional time for vacuuming
+
+    # Check for help option
+    if [[ "$unit" == "-h" || "$unit" == "--help" ]]; then
+        echo "Usage: clean_journal {{ "<" }}service-name{{ ">" }} [rotate] [time]"
+        echo ""
+        echo "Clean the journal for the specified service."
+        echo "Options:"
+        echo "  {{ "<" }}service-name{{ ">" }} Name of the service whose journal should be cleaned."
+        echo "  rotate          Optional; if specified, rotates the journal before cleaning."
+        echo "  time            Optional; specify the time duration for vacuuming (e.g., '1s', '1h')."
+        return
+    fi
+
+    # Check if a unit was provided
+    if [[ -z "$unit" ]]; then
+        echo "Error: Service name is required."
+        echo "Use -h or --help for usage information."
+        return 1
+    fi
+
+    # Optional: Rotate the journal if the second argument is passed
+    if [[ "$rotate" == "rotate" ]]; then
+        sudo journalctl --rotate  # Rotate the journal logs
+    fi
+
+    # Set default time if not provided
+    if [[ -z "$time" ]]; then
+        time="1s"  # Default to 1 second if no time is specified
+    fi
+
+    # Clean journal for the specified unit with the specified time
+    sudo journalctl --vacuum-time="$time" --unit="$unit"  # Clean the journal logs based on time and service unit
+}
+
+# Ensure a clean exit
+# trap "exit" SIGHUP SIGINT SIGTERM  # Exit on common signals
+
+lns() {
+# Check if the correct number of arguments is provided
+if [ "$#" -ne 2 ]; then
+echo "Create a symbolic link from SOURCE_FILE to TARGET_FILE."
+echo "Usage: lns [SOURCE_FILE] [TARGET_FILE]"
+return 1
+fi
+
+# Set the source file to the current directory
+local source_file="$1"
+local target_file="$2"
+
+# Create the symbolic link
+ln -s "$source_file" "$target_file"
+echo "Created symlink: $target_file -> $source_file"
+}
