@@ -1,0 +1,12 @@
+  [Definition]
+  failregex = ^<HOST> - - \[.*\] "GET /wp-login.php.*" .*"HTTP/1.1"
+              ^<HOST> - - \[.*\] "POST /wp-login.php.*" .*"HTTP/1.1"
+              ^<HOST> - - \[.*\] "GET /wp-admin/.*" .*"HTTP/1.1"
+              ^<HOST> - - \[.*\] "POST /wp-admin/.*" .*"HTTP/1.1"
+              ^<HOST> - - \[.*\] "GET /xmlrpc.php.*" .*"HTTP/1.1"
+              ^<HOST> - - \[.*\] "POST /xmlrpc.php.*" .*"HTTP/1.1"
+              ^<HOST> - - \[.*\] "GET /wp-content/.*" .*"HTTP/1.1"
+              ^<HOST> - - \[.*\] "POST /wp-content/.*" .*"HTTP/1.1"
+              ^<HOST> - - \[.*\] "GET /wp-includes/.*" .*"HTTP/1.1"
+              ^<HOST> - - \[.*\] "POST /wp-includes/.*" .*"HTTP/1.1"
+  ignoreregex =

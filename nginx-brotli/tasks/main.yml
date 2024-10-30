@@ -1,0 +1,325 @@
+---
+
+- name: Ensure apt cache is updated
+  apt:
+    update_cache: yes
+
+- name: Install required packages for adding repositories
+  apt:
+    name:
+      - curl
+      - gnupg2
+      - ca-certificates
+      - lsb-release
+      - debian-archive-keyring
+    state: present
+
+- name: Install sudo
+  apt:
+    name: sudo
+    state: present
+
+- name: Import the official NGINX signing key
+  shell: |
+    curl https://nginx.org/keys/nginx_signing.key | gpg --dearmor | tee /usr/share/keyrings/nginx-archive-keyring.gpg >/dev/null
+
+- name: Verify the NGINX signing key
+  command: |
+    gpg --dry-run --quiet --no-keyring --import --import-options import-show /usr/share/keyrings/nginx-archive-keyring.gpg
+  register: key_verification
+
+- name: Set NGINX version variable
+  set_fact:
+    nginx_repo_url: "https://nginx.org/packages/{{ 'mainline' if nginx_mainline_version else 'nginx' }}/{{ ansible_distribution | lower }}"
+    nginx_repo_distribution: "{{ ansible_distribution_release }}"
+
+- name: Add NGINX repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/usr/share/keyrings/nginx-archive-keyring.gpg] {{ nginx_repo_url }} {{ nginx_repo_distribution }} nginx"
+    filename: "nginx"
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+
+- name: Set up repository pinning for NGINX
+  copy:
+    content: |
+      Package: *
+      Pin: origin nginx.org
+      Pin: release o=nginx
+      Pin-Priority: 900
+    dest: /etc/apt/preferences.d/99nginx
+
+- name: Install required packages for NGINX and Brotli
+  apt:
+    name:
+      - cmake
+      - git
+      - build-essential
+      - zlib1g
+      - zlib1g-dev
+      - openssl
+      - libssl-dev
+      - nginx
+      - libbrotli1
+      - libbrotli-dev
+    state: present
+    update_cache: yes
+
+- name: Get installed NGINX version
+  command: nginx -v
+  register: nginx_version
+  ignore_errors: true
+  changed_when: false
+
+- name: Extract NGINX version number
+  set_fact:
+    ngver: "{{ nginx_version.stderr | regex_search('nginx/([0-9.]+)', '\\1') | first }}"
+  when: nginx_version is defined and nginx_version.stderr is defined
+
+- name: Create temporary build directory
+  tempfile:
+    state: directory
+  register: builddir
+
+- name: Download NGINX source
+  get_url:
+    url: "https://nginx.org/download/nginx-{{ ngver }}.tar.gz"
+    dest: "{{ builddir.path }}/nginx-{{ ngver }}.tar.gz"
+  when: ngver is defined and ngver | length > 0
+
+- name: Extract NGINX source
+  unarchive:
+    src: "{{ builddir.path }}/nginx-{{ ngver }}.tar.gz"
+    dest: "{{ builddir.path }}"
+    remote_src: yes
+  when: ngver is defined and ngver | length > 0
+
+- name: Clone ngx_brotli repository
+  git:
+    repo: "https://github.com/google/ngx_brotli.git"
+    dest: "{{ builddir.path }}/ngx_brotli"
+
+- name: Clone nginx_cookie_flag_module repository
+  git:
+    repo: "https://github.com/AirisX/nginx_cookie_flag_module.git"
+    dest: "{{ builddir.path }}/nginx_cookie_flag_module"
+
+- name: Clone ngx-fancyindex repository
+  git:
+    repo: "https://github.com/aperezdc/ngx-fancyindex.git"
+    dest: "{{ builddir.path }}/ngx-fancyindex"
+
+- name: Clone headers-more-nginx-module repository
+  git:
+    repo: "https://github.com/openresty/headers-more-nginx-module.git"
+    dest: "{{ builddir.path }}/headers-more-nginx-module"
+
+- name: Update submodule in ngx_brotli
+  command: git submodule update --init
+  args:
+    chdir: "{{ builddir.path }}/ngx_brotli"
+
+#- name: Clone nginx-module-vts repository
+#  git:
+#    repo: "https://github.com/vozlt/nginx-module-vts.git"
+#    dest: "{{ builddir.path }}/nginx-module-vts"
+
+- name: Get latest PCRE2 release
+  uri:
+    url: "https://api.github.com/repos/PCRE2Project/pcre2/releases/latest"
+    method: GET
+    return_content: yes
+  register: pcre2_release
+
+- name: Set PCRE2 version and download URL
+  set_fact:
+    pcre2_version: "{{ pcre2_release.json.tag_name }}"
+    pcre2_download_url: "{{ pcre2_release.json.assets | selectattr('name', 'search', '.tar.gz$') | map(attribute='browser_download_url') | first }}"
+
+- name: Create temporary build directory for PCRE2
+  tempfile:
+    state: directory
+  register: pcre2_builddir
+
+- name: Download PCRE2 source code
+  get_url:
+    url: "{{ pcre2_download_url }}"
+    dest: "{{ pcre2_builddir.path }}/{{ pcre2_version }}.tar.gz"
+  when: pcre2_download_url is defined
+
+- name: Extract PCRE2 source code
+  unarchive:
+    src: "{{ pcre2_builddir.path }}/{{ pcre2_version }}.tar.gz"
+    dest: "{{ pcre2_builddir.path }}"
+    remote_src: yes
+
+- name: Compile and install PCRE2
+  command: ./configure --prefix=/usr/local
+  args:
+    chdir: "{{ pcre2_builddir.path }}/{{ pcre2_version }}"
+
+- name: Make PCRE2
+  command: make
+  args:
+    chdir: "{{ pcre2_builddir.path }}/{{ pcre2_version }}"
+
+- name: Install PCRE2
+  command: make install
+  args:
+    chdir: "{{ pcre2_builddir.path }}/{{ pcre2_version }}"
+
+- name: Set extra modules based on nginx_remove_mail_module
+  set_fact:
+    extra_modules: >
+      {%- if nginx_remove_mail_modules is not true -%}
+      --with-mail
+      --with-mail_ssl_module
+      {%- endif -%}
+      {%- if nginx_remove_stream_modules is not true -%}
+      --with-stream
+      --with-stream_realip_module
+      --with-stream_ssl_module
+      {%- endif -%}
+
+- name: Configure NGINX with all specified modules
+  command: >
+    ./configure
+    --prefix=/etc/nginx
+    --sbin-path=/usr/sbin/nginx
+    --modules-path=/usr/lib/nginx/modules
+    --conf-path=/etc/nginx/nginx.conf
+    --error-log-path=/var/log/nginx/error.log
+    --http-log-path=/var/log/nginx/access.log
+    --pid-path=/var/run/nginx.pid
+    --lock-path=/var/run/nginx.lock
+    --http-client-body-temp-path=/var/cache/nginx/client_temp
+    --http-proxy-temp-path=/var/cache/nginx/proxy_temp
+    --http-fastcgi-temp-path=/var/cache/nginx/fastcgi_temp
+    --http-uwsgi-temp-path=/var/cache/nginx/uwsgi_temp
+    --http-scgi-temp-path=/var/cache/nginx/scgi_temp
+    --user=nginx
+    --group=nginx
+    --with-compat
+    --with-file-aio
+    --with-threads
+    --with-http_addition_module
+    --with-http_auth_request_module
+    --with-http_dav_module
+    --with-http_flv_module
+    --with-http_gunzip_module
+    --with-http_gzip_static_module
+    --with-http_mp4_module
+    --with-http_random_index_module
+    --with-http_realip_module
+    --with-http_secure_link_module
+    --with-http_slice_module
+    --with-http_ssl_module
+    --with-http_stub_status_module
+    --with-http_sub_module
+    --with-http_v2_module
+    --with-http_v3_module
+    {{ extra_modules | trim }} 
+    --with-pcre="{{ pcre2_builddir.path }}/{{ pcre2_version }}"
+    --add-dynamic-module={{ builddir.path }}/ngx_brotli
+    --add-dynamic-module={{ builddir.path }}/nginx_cookie_flag_module
+    --add-dynamic-module={{ builddir.path }}/ngx-fancyindex
+    --add-dynamic-module={{ builddir.path }}/headers-more-nginx-module
+#    --add-dynamic-module={{ builddir.path }}/nginx-module-vts
+  args:
+    chdir: "{{ builddir.path }}/nginx-{{ ngver }}"
+
+- name: Make NGINX
+  command: make
+  args:
+    chdir: "{{ builddir.path }}/nginx-{{ ngver }}"
+
+- name: Install NGINX
+  command: make install
+  args:
+    chdir: "{{ builddir.path }}/nginx-{{ ngver }}"
+
+- name: Find compiled module files
+  find:
+    paths: "{{ builddir.path }}/nginx-{{ ngver }}/objs/"
+    patterns: "*.so"
+  register: so_files
+
+- name: Move compiled modules to the modules directory
+  copy:
+    remote_src: yes
+    src: "{{ item.path }}"
+    dest: "/usr/lib/nginx/modules/{{ item.path | basename }}"
+    mode: preserve
+  loop: "{{ so_files.files }}"
+  when: ngver is defined and ngver | length > 0
+
+- name: Create customized nginx.conf with pre settings
+  template:
+    src: default_nginx_conf.j2
+    dest: /etc/nginx/nginx.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Create cloudflare ip list
+  template:
+    src: cloudflare_ip.conf.j2
+    dest: /etc/nginx/cloudflare.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Ensure /var/www/html directory exists
+  file:
+    path: /var/www/html
+    state: directory
+    mode: '0755'
+    owner: www-data
+    group: www-data
+    recurse: yes
+
+- name: Remove build dependencies
+  apt:
+    name:
+      - cmake
+      - zlib1g-dev
+      - build-essential
+    state: absent
+  ignore_errors: true
+
+- name: Remove default symbolic link
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  ignore_errors: true
+
+- name: Remove the sites-enabled directory, use /etc/nginx/conf.d instead
+  file:
+    path: /etc/nginx/sites-enabled
+    state: absent
+
+- name: Remove the sites-available directory, use /etc/nginx/conf.d instead
+  file:
+    path: /etc/nginx/sites-available
+    state: absent
+
+- name: Cleanup temporary build directories
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "{{ builddir.path }}"
+    - "{{ pcre2_builddir.path }}"
+
+- name: Create Nginx config for domains with SSL settings
+  template:
+    src: nginx_default_server_conf.j2
+    dest: "/etc/nginx/conf.d/{{ domain }}.conf"
+    owner: root
+    group: root
+    mode: '0644'
+  loop: "{{ domains if generate_domain_configs else ['example.com'] }}"
+  loop_control:
+    loop_var: domain

@@ -1,0 +1,89 @@
+---
+# fail2ban/tasks/main.yml
+- name: Installiere Fail2ban
+  package:
+    name: fail2ban
+    state: present
+
+- name: Installiere rsyslog Paket
+  apt:
+    name: rsyslog
+    state: present
+
+- name: Setze das Fail2ban Jails Template ein
+  template:
+    src: fail2ban_jails.j2
+    dest: /etc/fail2ban/jail.d/defaults-debian.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Erstelle Fail2ban Gitea Filterdatei
+  copy:
+    dest: /etc/fail2ban/filter.d/gitea.conf
+    content: |
+      [Definition]
+      failregex = .*Failed authentication attempt for .* from <HOST>
+      ignoreregex =
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Erstelle Fail2ban WordPress Filterdatei
+  template:
+    src: wordpress.conf.j2
+    dest: /etc/fail2ban/filter.d/wordpress.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Erstelle Fail2ban WebExploits Filterdatei
+  template:
+    src: webexploits.conf.j2
+    dest: /etc/fail2ban/filter.d/webexploits.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Erstelle Fail2ban Nginx Proxy Filterdatei
+  copy:
+    dest: /etc/fail2ban/filter.d/nginx-proxy.conf
+    content: |
+      [Definition]
+      failregex = ^<HOST> -.*GET http.*
+      ignoreregex =
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Erstelle Fail2ban Nginx Dos Filterdatei
+  copy:
+    dest: /etc/fail2ban/filter.d/nginx-dos.conf
+    content: |
+      [Definition]
+      failregex = ^<HOST> -.*"(GET|POST).*HTTP.*"$ 
+      ignoreregex =
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Erstelle Fail2ban SSHD DDos Filterdatei
+  template:
+    src: sshd_ddos.conf.j2
+    dest: /etc/fail2ban/filter.d/sshd-ddos.conf
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Ensure allowipv6 is set to 'auto' in fail2ban.conf
+  lineinfile:
+    path: /etc/fail2ban/fail2ban.conf
+    regexp: '^#?allowipv6\s*=\s*.*'
+    line: 'allowipv6 = auto'
+    state: present
+    backup: yes
+
+- name: Restart Fail2Ban
+  service:
+    name: fail2ban
+    state: restarted
