@@ -93,6 +93,13 @@
     state: present
     update_cache: true
 
+- name: Ensure SELinux settings for nginx reverse proxying
+  ansible.builtin.seboolean:
+    name: httpd_can_network_connect
+    state: yes
+    persistent: yes
+  when: ansible_selinux is defined and ansible_selinux.status == "enabled"
+
 - name: Get installed NGINX version
   ansible.builtin.command:
     cmd: nginx -v

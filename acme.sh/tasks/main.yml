@@ -1,4 +1,13 @@
 # tasks/main.yml
+- name: ensure prequisites are installed
+  ansible.builtin.package:
+    name:
+      - git
+      - openssl
+      - curl
+    state: present
+    update_cache: true
+
 - name: Klone acme.sh Repository
   ansible.builtin.git:
     repo: 'https://github.com/acmesh-official/acme.sh.git'
@@ -9,19 +18,21 @@
     version: master
 
 - name: Installiere acme.sh
-  ansible.builtin.shell: |
-    cd ~/myacme
-    ./acme.sh --install \
-      --home {{ acme_sh_path }} \
-      --config-home {{ acme_sh_path }}/data \
-      --cert-home /etc/ssl/certs
+  ansible.builtin.command: >
+    ./acme.sh --install
+    --home {{ acme_sh_path }}
+    --config-home {{ acme_sh_path }}/data
+    --cert-home /etc/ssl/certs
   args:
-    creates: "{{ acme_sh_path }}"
+    chdir: '~/myacme'
+    creates: "{{ acme_sh_path }}/acme.sh"
 
 - name: Entferne myacme Ordner nach Installation
   ansible.builtin.file:
-    path: ~/myacme
+    path: '~/myacme'
     state: absent
+
+
 
 - name: Ensure acme.sh environment variables and alias are set for bash, zsh, and create acme.sh environment file
   block:
@@ -34,7 +45,7 @@
         mode: '0755'
       when: install_oh_my_zsh | default(false)
 
-    - name: Ensure environment variables and alias are set for bash
+    - name: Ensure acme.sh environment variables and alias are set for bash, zsh, and create acme.sh environment file
       ansible.builtin.copy:
         dest: /etc/profile.d/acme.sh
         content: |
@@ -43,27 +54,13 @@
         owner: root
         group: root
         mode: '0644'
+      loop:
+        - /usr/share/oh-my-zsh/custom/acme.zsh
+        - /etc/profile.d/acme.sh
+        - "{{ acme_sh_path }}/acme.sh.env"
+      loop_control:
+        label: "{{ item }}"
 
-    - name: Ensure environment variables and alias are set for Zsh if Oh My Zsh is installed
-      ansible.builtin.copy:
-        dest: /usr/share/oh-my-zsh/custom/acme.zsh
-        content: |
-          export LE_WORKING_DIR="{{ acme_sh_path }}"
-          alias acme.sh="{{ acme_sh_path }}/acme.sh"
-        owner: root
-        group: root
-        mode: '0644'
-      when: install_oh_my_zsh | default(false)
-
-    - name: Create acme.sh environment file
-      ansible.builtin.copy:
-        dest: "{{ acme_sh_path }}/acme.sh.env"
-        content: |
-          export LE_WORKING_DIR="{{ acme_sh_path }}"
-          alias acme.sh="{{ acme_sh_path }}/acme.sh"
-        owner: root
-        group: root
-        mode: '0644'
 
 - name: Configure Cloudflare API credentials
   ansible.builtin.copy:
@@ -72,24 +69,21 @@
       export CF_Token="{{ cloudflare_api_key }}"
     mode: '0600'
 
-- name: Prepare domain list for ACME certificate issuance
-  ansible.builtin.set_fact:
-    acme_domains: "{{ domains }}"
-
 - name: Register ACME account with ZeroSSL
-  ansible.builtin.shell: |
-    . {{ acme_sh_path }}/acme.sh.env &&
+  ansible.builtin.command: >
     {{ acme_sh_path }}/acme.sh --register-account -m {{ account_email }}
+  environment:
+    LE_WORKING_DIR: "{{ acme_sh_path }}"
   changed_when: false
 
-- name: Set ACME variables
+- name: Set ACME staging variable
   ansible.builtin.set_fact:
-    acme_staging_certs: "{{ '--staging' if (acme_sh_dry_run | default(false)) else '' }}"
+    acme_staging_flag: "{{ '--staging' if acme_sh_dry_run | default(false) else '' }}"
 
 - name: Issue ACME certificates using acme.sh
   ansible.builtin.shell: |
     . {{ acme_sh_path }}/acme.sh.env && \
-    {{ acme_sh_path }}/acme.sh --issue {{ acme_staging_certs }} --dns dns_cf \
+    {{ acme_sh_path }}/acme.sh --issue {{ acme_staging_flag }} --dns dns_cf \
     -d {{ item }} \
     {% if wildcard %} -d '*.'{{ item }} {% endif %} \
     {% if acme_sh_force_renewal | default(false) %} --force {% endif %}
@@ -112,33 +106,35 @@
     label: "{{ item }}"
   changed_when: false
 
-- name: Ensure all certificate files have correct permissions
+- name: Ensure permissions for certificate files
   ansible.builtin.file:
     path: "{{ cert_path }}/{{ item }}.crt"
     mode: '0644'
-  loop: "{{ domains }}"
+  loop: "{{ acme_domains }}"
   loop_control:
     label: "{{ item }}"
 
-- name: Ensure all key files have correct permissions
+- name: Ensure permissions for key files
   ansible.builtin.file:
     path: "{{ cert_path }}/{{ item }}.key"
     mode: '0644'
-  loop: "{{ domains }}"
+  loop: "{{ acme_domains }}"
   loop_control:
     label: "{{ item }}"
 
 - name: Generate Diffie-Hellman Parameters
-  ansible.builtin.command: >
-    openssl dhparam -out {{ cert_path }}/dhparam.pem 2048
+  community.crypto.openssl_dhparam:
+    path: "{{ cert_path }}/dhparam.pem"
+    size: 4096
   changed_when: false
 
-- name: Ensure DH parameters file has correct permissions
-  ansible.builtin.file:
-    path: "{{ cert_path }}/dhparam.pem"
-    mode: '0644'
+- name: Test NGINX configuration
+  ansible.builtin.command: nginx -t
+  register: nginx_test
+  ignore_errors: yes
 
 - name: Restart NGINX to apply changes
   ansible.builtin.service:
     name: nginx
     state: restarted
+  when: "'successful' in nginx_test.stdout"
