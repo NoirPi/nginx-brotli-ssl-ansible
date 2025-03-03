@@ -11,10 +11,43 @@ timezone: "UTC"
 
 #### Oh-my-zsh Settings ####
 oh_my_zsh_path: "/usr/share/oh-my-zsh"
-oh_my_zsh_plugins: [ ansible, colored-man-pages, colorize, command-not-found, copybuffer, copyfile, copypath, cp,
-                     dirhistory, docker, docker-compose, extract, fasd, git, git-extras, gitfast, github, httpie,
-                     history, jsontools, last-working-dir, pep8, perms, pip, python, rsync, safe-paste, screen,
-                     sublime, sudo, systemadmin, systemd, wd, zsh-autosuggestions ]
+oh_my_zsh_plugins:
+  - [ "ansible", "Provides support for Ansible commands." ]
+  - [ "colored-man-pages", "Colors man pages for better readability." ]
+  - [ "colorize", "Adds color output to various commands for better visibility." ]
+  - [ "command-not-found", "Provides helpful hints when a command is not found." ]
+  - [ "copybuffer", "Allows copying text between the shell and clipboard." ]
+  - [ "copyfile", "Allows copying files with a simple command." ]
+  - [ "copypath", "Copies the full path of a file or directory to the clipboard." ]
+  - [ "cp", "Extends the `cp` command with additional functions and options." ]
+  - [ "dirhistory", "Enables saving and retrieving directory history." ]
+  - [ "docker", "Provides commands for managing Docker containers." ]
+  - [ "docker-compose", "Adds support for Docker Compose commands." ]
+  - [ "extract", "Allows extracting various archive formats with a simple command." ]
+  - [ "fasd", "Quick access to recently used files and directories." ]
+  - [ "git", "Adds useful aliases and functions for using Git." ]
+  - [ "git-extras", "Additional Git commands and functions beyond the standard ones." ]
+  - [ "gitfast", "Optimizes Git commands for faster execution." ]
+  - [ "github", "Provides commands for interacting with GitHub, like creating pull requests." ]
+  - [ "httpie", "Enhances HTTP request usage with a simpler and more readable command." ]
+  - [ "history", "Expands functions for managing and displaying command history." ]
+  - [ "jsontools", "Provides useful tools for processing and displaying JSON data." ]
+  - [ "last-working-dir", "Restores the last used directory when opening a new shell." ]
+  - [ "pep8", "Provides tools for checking Python code against PEP 8 style guide." ]
+  - [ "perms", "Offers commands for managing file and directory permissions." ]
+  - [ "pip", "Enhances the usage of Python's package installer, pip." ]
+  - [ "python", "Provides commands and functions for working with Python." ]
+  - [ "rsync", "Adds support for the `rsync` command for syncing files." ]
+  - [ "safe-paste", "Enables safe pasting of content to prevent command injection." ]
+  - [ "screen", "Adds commands for using the screen utility for terminal multiplexing." ]
+  - [ "sublime", "Provides commands for integrating with Sublime Text." ]
+  - [ "sudo", "Enhances the usage of the `sudo` command." ]
+  - [ "systemadmin", "Provides administrative tools for system management." ]
+  - [ "systemd", "Adds support for managing systemd services and units." ]
+  - [ "wd", "Provides commands for managing and navigating directories easily." ]
+  - [ "zsh-autosuggestions", "Suggests commands as you type based on command history." ]
+  - [ "#per-directory-history", "Saves command history for each directory separately (optional)" ]
+  - [ "dotenv", "Loads environment variables from a `.env` file (optional)." ]
 
 #### NGINX Settings ####
 nginx_server_header: "nginx"
